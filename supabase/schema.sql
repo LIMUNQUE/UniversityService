@@ -15,6 +15,7 @@ create table public.programs (
   code text not null unique,
   title text not null,
   modality text,
+  teacher_id uuid references public.profiles(id) on delete set null,
   starts_on date,
   created_at timestamptz not null default now()
 );
@@ -49,6 +50,19 @@ create policy "Profiles are readable by owner"
   on public.profiles for select
   using (auth.uid() = id);
 
+create policy "Teachers can read enrolled student profiles"
+  on public.profiles for select
+  using (
+    auth.uid() = id
+    or exists (
+      select 1
+      from public.enrollments
+      join public.programs on programs.id = enrollments.program_id
+      where enrollments.profile_id = profiles.id
+        and programs.teacher_id = auth.uid()
+    )
+  );
+
 create policy "Profiles are editable by owner"
   on public.profiles for update
   using (auth.uid() = id);
@@ -59,11 +73,41 @@ create policy "Programs are public"
 
 create policy "Authenticated users can create programs"
   on public.programs for insert
-  with check (auth.role() = 'authenticated');
+  with check (
+    auth.role() = 'authenticated'
+    and teacher_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role in ('teacher', 'admin')
+    )
+  );
+
+create policy "Teachers can update own programs"
+  on public.programs for update
+  using (
+    teacher_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role in ('teacher', 'admin')
+    )
+  )
+  with check (teacher_id = auth.uid());
 
 create policy "Enrollments are readable by owner"
   on public.enrollments for select
-  using (auth.uid() = profile_id);
+  using (
+    auth.uid() = profile_id
+    or exists (
+      select 1
+      from public.programs
+      where programs.id = enrollments.program_id
+        and programs.teacher_id = auth.uid()
+    )
+  );
 
 create policy "Students can create own enrollments"
   on public.enrollments for insert
@@ -116,3 +160,6 @@ on conflict (code) do update set
   title = excluded.title,
   modality = excluded.modality,
   starts_on = excluded.starts_on;
+
+alter table public.programs
+  add column if not exists teacher_id uuid references public.profiles(id) on delete set null;

@@ -2,6 +2,7 @@ import { ArrowLeft, BookOpen, CheckCircle2, GraduationCap, UsersRound } from "lu
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { enrollInProgram, leaveProgram } from "@/app/programs/actions";
+import { CreateProgramForm } from "@/components/programs/create-program-form";
 import { createClient } from "@/lib/supabase/server";
 
 type Program = {
@@ -10,6 +11,7 @@ type Program = {
   title: string;
   modality: string | null;
   starts_on: string | null;
+  teacher_id: string | null;
 };
 
 type Profile = {
@@ -32,7 +34,7 @@ export default async function ProgramsPage() {
 
   const [{ data: profile }, { data: programs }, { data: enrollments }] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", user.id).maybeSingle<Profile>(),
-    supabase.from("programs").select("id, code, title, modality, starts_on").order("starts_on"),
+    supabase.from("programs").select("id, code, title, modality, starts_on, teacher_id").order("starts_on"),
     supabase.from("enrollments").select("program_id").eq("profile_id", user.id)
   ]);
 
@@ -65,6 +67,12 @@ export default async function ProgramsPage() {
           </p>
         </div>
 
+        {role === "teacher" || role === "admin" ? (
+          <div className="mt-8">
+            <CreateProgramForm />
+          </div>
+        ) : null}
+
         {programList.length === 0 ? (
           <div className="card mt-8 p-6">
             <BookOpen size={24} className="text-[var(--primary)]" aria-hidden="true" />
@@ -77,6 +85,7 @@ export default async function ProgramsPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {programList.map((program) => {
               const isEnrolled = enrolledIds.has(program.id);
+              const canManage = role === "admin" || (role === "teacher" && program.teacher_id === user.id);
               return (
                 <article className="card flex min-h-72 flex-col p-5" key={program.id}>
                   <div className="flex items-start justify-between gap-3">
@@ -98,10 +107,16 @@ export default async function ProgramsPage() {
                   </div>
 
                   <div className="mt-auto pt-6">
-                    {role === "teacher" ? (
-                      <button className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white px-4 py-3 font-semibold">
+                    {role === "teacher" || role === "admin" ? (
+                      <Link
+                        aria-disabled={!canManage}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white px-4 py-3 font-semibold ${
+                          canManage ? "" : "pointer-events-none opacity-55"
+                        }`}
+                        href={`/programs/${program.id}`}
+                      >
                         <UsersRound size={18} aria-hidden="true" /> Ver estudiantes
-                      </button>
+                      </Link>
                     ) : isEnrolled ? (
                       <form action={leaveProgram}>
                         <input name="programId" type="hidden" value={program.id} />

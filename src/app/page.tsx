@@ -6,6 +6,7 @@ import {
   Menu,
   ShieldCheck
 } from "lucide-react";
+import Link from "next/link";
 import { activity, courses, modules, roles } from "@/lib/modules";
 
 export default function Home() {
@@ -28,8 +29,8 @@ export default function Home() {
           <a href="#aula">Aula</a>
           <a href="#pagos">Pagos</a>
           <a href="#contacto">Contacto</a>
-          <a href="/programs">Catalogo</a>
-          <a href="/login">Acceso</a>
+          <Link href="/programs">Catalogo</Link>
+          <Link href="/login">Acceso</Link>
         </nav>
         <button className="icon-button md:hidden" aria-label="Abrir menu">
           <Menu size={20} aria-hidden="true" />
@@ -55,12 +56,12 @@ export default function Home() {
             >
               Ver modulos <ArrowRight size={18} aria-hidden="true" />
             </a>
-            <a
+            <Link
               className="inline-flex items-center justify-center rounded-lg border border-[var(--line)] bg-white px-5 py-3 font-semibold"
               href="/register"
             >
               Crear cuenta
-            </a>
+            </Link>
           </div>
         </div>
 
