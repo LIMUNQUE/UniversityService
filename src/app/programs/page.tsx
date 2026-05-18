@@ -1,7 +1,9 @@
 import { ArrowLeft, BookOpen, CheckCircle2, GraduationCap, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { enrollInProgram, leaveProgram } from "@/app/programs/actions";
+import { leaveProgram } from "@/app/programs/actions";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { CartLink } from "@/components/cart/cart-link";
 import { CreateProgramForm } from "@/components/programs/create-program-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,6 +13,7 @@ type Program = {
   title: string;
   modality: string | null;
   starts_on: string | null;
+  price_cents: number;
   teacher_id: string | null;
 };
 
@@ -34,7 +37,7 @@ export default async function ProgramsPage() {
 
   const [{ data: profile }, { data: programs }, { data: enrollments }] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", user.id).maybeSingle<Profile>(),
-    supabase.from("programs").select("id, code, title, modality, starts_on, teacher_id").order("starts_on"),
+    supabase.from("programs").select("id, code, title, modality, starts_on, price_cents, teacher_id").order("starts_on"),
     supabase.from("enrollments").select("program_id").eq("profile_id", user.id)
   ]);
 
@@ -49,9 +52,12 @@ export default async function ProgramsPage() {
           <Link className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--muted)]" href="/dashboard">
             <ArrowLeft size={16} aria-hidden="true" /> Dashboard
           </Link>
-          <span className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-semibold">
-            {role === "teacher" ? "Docente" : "Estudiante"}
-          </span>
+          <div className="flex items-center gap-2">
+            {role === "student" ? <CartLink /> : null}
+            <span className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-semibold">
+              {role === "teacher" ? "Docente" : "Estudiante"}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -87,7 +93,7 @@ export default async function ProgramsPage() {
               const isEnrolled = enrolledIds.has(program.id);
               const canManage = role === "admin" || (role === "teacher" && program.teacher_id === user.id);
               return (
-                <article className="card flex min-h-72 flex-col p-5" key={program.id}>
+                <article className="card interactive-card flex min-h-72 flex-col p-5" key={program.id}>
                   <div className="flex items-start justify-between gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-lg bg-[#e7f1ec] text-[var(--primary)]">
                       {role === "teacher" ? (
@@ -104,6 +110,7 @@ export default async function ProgramsPage() {
                   <div className="mt-4 grid gap-2 text-sm text-[var(--muted)]">
                     <p>Modalidad: {program.modality ?? "Por definir"}</p>
                     <p>Inicio: {program.starts_on ?? "Por definir"}</p>
+                    <p>Inversion: ${(program.price_cents / 100).toFixed(2)}</p>
                   </div>
 
                   <div className="mt-auto pt-6">
@@ -118,19 +125,29 @@ export default async function ProgramsPage() {
                         <UsersRound size={18} aria-hidden="true" /> Ver estudiantes
                       </Link>
                     ) : isEnrolled ? (
-                      <form action={leaveProgram}>
-                        <input name="programId" type="hidden" value={program.id} />
-                        <button className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white px-4 py-3 font-semibold">
-                          <CheckCircle2 size={18} aria-hidden="true" /> Matriculado
-                        </button>
-                      </form>
+                      <div className="grid gap-2">
+                        <Link
+                          className="btn-primary"
+                          href={`/programs/${program.id}`}
+                        >
+                          <BookOpen size={18} aria-hidden="true" /> Entrar al aula
+                        </Link>
+                        <form action={leaveProgram}>
+                          <input name="programId" type="hidden" value={program.id} />
+                          <button className="btn-secondary w-full">
+                            <CheckCircle2 size={18} aria-hidden="true" /> Desmatricularme
+                          </button>
+                        </form>
+                      </div>
                     ) : (
-                      <form action={enrollInProgram}>
-                        <input name="programId" type="hidden" value={program.id} />
-                        <button className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 font-semibold text-white">
-                          Matricularme
-                        </button>
-                      </form>
+                      <AddToCartButton
+                        item={{
+                          code: program.code,
+                          id: program.id,
+                          priceCents: program.price_cents,
+                          title: program.title
+                        }}
+                      />
                     )}
                   </div>
                 </article>

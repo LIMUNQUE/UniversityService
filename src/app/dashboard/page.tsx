@@ -1,8 +1,11 @@
 import { BookOpen, CreditCard, FileText, Plus, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CartLink } from "@/components/cart/cart-link";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { getMoodleCourseUrl } from "@/lib/moodle/client";
 import { activity } from "@/lib/modules";
+import { formatCurrency } from "@/lib/currency";
 import { createClient } from "@/lib/supabase/server";
 
 type Profile = {
@@ -14,10 +17,20 @@ type EnrollmentWithProgram = {
   program_id: string;
   programs: {
     code: string;
+    moodle_course_id: number | null;
     title: string;
     modality: string | null;
     starts_on: string | null;
   } | null;
+};
+
+type Payment = {
+  id: string;
+  amount_cents: number;
+  currency: string;
+  provider: string;
+  status: "pending" | "paid" | "failed" | "refunded";
+  created_at: string;
 };
 
 export default async function DashboardPage() {
@@ -38,8 +51,15 @@ export default async function DashboardPage() {
 
   const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("program_id, programs(code, title, modality, starts_on)")
+    .select("program_id, programs(code, title, modality, starts_on, moodle_course_id)")
     .eq("profile_id", user.id);
+
+  const { data: payments } = await supabase
+    .from("payments")
+    .select("id, amount_cents, currency, provider, status, created_at")
+    .eq("profile_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(4);
 
   const displayName = profile?.full_name ?? user.email ?? "Usuario";
   const roleLabel =
@@ -47,6 +67,7 @@ export default async function DashboardPage() {
   const enrolledPrograms = ((enrollments as EnrollmentWithProgram[] | null) ?? []).filter(
     (item) => item.programs
   );
+  const paymentList = (payments as Payment[] | null) ?? [];
 
   return (
     <main className="min-h-screen bg-[#f7f8f4]">
@@ -58,7 +79,10 @@ export default async function DashboardPage() {
             </span>
             Portal Academico
           </Link>
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            {roleLabel === "Estudiante" ? <CartLink /> : null}
+            <LogoutButton />
+          </div>
         </div>
       </header>
 
@@ -91,7 +115,7 @@ export default async function DashboardPage() {
             {activity.map((item) => {
               const Icon = item.icon;
               return (
-                <article key={item.title} className="card p-5">
+                <article key={item.title} className="card interactive-card p-5">
                   <Icon size={22} className="text-[var(--primary)]" aria-hidden="true" />
                   <h2 className="mt-4 font-semibold">{item.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.description}</p>
@@ -135,7 +159,7 @@ export default async function DashboardPage() {
             ) : (
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 {enrolledPrograms.map((enrollment) => (
-                  <article key={enrollment.program_id} className="rounded-lg border border-[var(--line)] p-4">
+                  <article key={enrollment.program_id} className="interactive-card rounded-lg border border-[var(--line)] bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gold)]">
                       {enrollment.programs?.code}
                     </p>
@@ -146,6 +170,16 @@ export default async function DashboardPage() {
                     <p className="mt-1 text-sm text-[var(--muted)]">
                       Inicio: {enrollment.programs?.starts_on ?? "Por definir"}
                     </p>
+                    {getMoodleCourseUrl(enrollment.programs?.moodle_course_id) ? (
+                      <a
+                        className="mt-4 inline-flex text-sm font-semibold text-[var(--primary-dark)] hover:text-[var(--accent)]"
+                        href={getMoodleCourseUrl(enrollment.programs?.moodle_course_id) ?? "#"}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Abrir Moodle
+                      </a>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -158,20 +192,38 @@ export default async function DashboardPage() {
                 Historial
               </p>
               <h2 className="mt-2 text-2xl font-bold">Pagos placeholder</h2>
-              <div className="mt-5 grid gap-3">
-                <div className="flex items-center justify-between rounded-lg border border-[var(--line)] p-4">
-                  <span className="text-sm font-medium">Matricula placeholder</span>
-                  <span className="text-sm text-[var(--muted)]">$0.00</span>
+              {paymentList.length === 0 ? (
+                <div className="mt-5 rounded-lg border border-dashed border-[var(--line)] p-5 text-sm text-[var(--muted)]">
+                  No hay pagos registrados todavia.
                 </div>
-              </div>
+              ) : (
+                <div className="mt-5 grid gap-3">
+                  {paymentList.map((payment) => (
+                    <div
+                      className="flex items-center justify-between rounded-lg border border-[var(--line)] p-4"
+                      key={payment.id}
+                    >
+                      <div>
+                        <span className="text-sm font-medium">{payment.provider}</span>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {new Date(payment.created_at).toLocaleDateString("es-EC")}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-[var(--primary-dark)]">
+                        {formatCurrency(payment.amount_cents)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </article>
             <article className="card bg-[#17352f] p-5 text-white">
               <CreditCard size={24} aria-hidden="true" />
-              <p className="mt-5 text-sm text-white/65">Saldo actual</p>
-              <p className="mt-2 text-3xl font-bold">$0.00</p>
-              <button className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-white px-4 py-3 font-semibold text-[#17352f]">
-                Pagar
-              </button>
+              <p className="mt-5 text-sm text-white/65">Cursos inscritos</p>
+              <p className="mt-2 text-3xl font-bold">{enrolledPrograms.length}</p>
+              <Link className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-white px-4 py-3 font-semibold text-[#17352f]" href="/programs">
+                Comprar cursos
+              </Link>
             </article>
           </section>
         </div>

@@ -39,3 +39,7 @@ El contenido visible es placeholder por ahora. La siguiente fase natural es cone
 El registro esta abierto para estudiantes y docentes. El trigger `handle_new_user` crea el perfil automaticamente usando los metadatos enviados desde el formulario.
 
 Despues de actualizar `schema.sql`, vuelve a ejecutar el archivo completo en Supabase. Las sentencias usan `on conflict` y `drop trigger if exists`, asi que son seguras para repetir durante desarrollo.
+
+## Moodle local
+
+La integracion Moodle usa REST contra `MOODLE_BASE_URL`. Ver [docs/moodle-local.md](docs/moodle-local.md) para configurar el token, funciones necesarias y endpoint de diagnostico.

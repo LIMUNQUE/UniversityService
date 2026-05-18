@@ -1,0 +1,29 @@
+services:
+  moodle:
+    image: bitnamilegacy/moodle:latest
+    ports:
+      - '8080:8080'
+      - '8443:8443'
+    environment:
+      # Modo diagnóstico para ver errores ocultos
+      - BITNAMI_DEBUG=true
+      
+      - MOODLE_DATABASE_TYPE=pgsql
+      - MOODLE_DATABASE_HOST=aws-1-us-west-1.pooler.supabase.com
+      - MOODLE_DATABASE_PORT_NUMBER=5432
+      - MOODLE_DATABASE_USER=postgres.uhffmcrgxtzvlsimcfcu
+      - MOODLE_DATABASE_PASSWORD=1Hrs4kvUOL6Y2ERT
+      - MOODLE_DATABASE_NAME=postgres
+      
+      # (Se eliminó la variable del esquema para usar mdl_ por defecto)
+      
+      - MOODLE_PASSWORD=admin_password
+    volumes:
+      - 'moodle_data:/bitnami/moodle'
+      - 'moodledata_data:/bitnami/moodledata'
+
+volumes:
+  moodle_data:
+    driver: local
+  moodledata_data:
+    driver: local

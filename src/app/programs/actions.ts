@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { syncCourseToMoodle } from "@/lib/moodle/sync";
 import { createClient } from "@/lib/supabase/server";
 
 export async function enrollInProgram(formData: FormData) {
@@ -66,6 +67,7 @@ export async function createProgram(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const modality = String(formData.get("modality") ?? "").trim();
   const startsOn = String(formData.get("startsOn") ?? "").trim();
+  const price = Number(formData.get("price") ?? 100);
 
   const supabase = await createClient();
   const {
@@ -90,16 +92,33 @@ export async function createProgram(formData: FormData) {
     throw new Error("Program code and title are required.");
   }
 
-  const { error } = await supabase.from("programs").insert({
-    code,
-    title,
-    modality: modality || null,
-    starts_on: startsOn || null,
-    teacher_id: user.id
-  });
+  const { data: program, error } = await supabase
+    .from("programs")
+    .insert({
+      code,
+      title,
+      modality: modality || null,
+      price_cents: Number.isFinite(price) ? Math.max(0, Math.round(price * 100)) : 10000,
+      starts_on: startsOn || null,
+      teacher_id: user.id
+    })
+    .select("id, code, title, moodle_course_id")
+    .single<{
+      code: string;
+      id: string;
+      moodle_course_id: number | null;
+      title: string;
+    }>();
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (program) {
+    await syncCourseToMoodle({
+      program,
+      supabase
+    }).catch(() => null);
   }
 
   revalidatePath("/dashboard");

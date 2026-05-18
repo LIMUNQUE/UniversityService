@@ -37,6 +37,11 @@ export function CreateProgramForm() {
         </label>
       </div>
 
+      <label>
+        <span className="mb-2 block text-sm font-semibold">Precio de inscripcion</span>
+        <input className="field" min="0" name="price" placeholder="100.00" step="0.01" type="number" />
+      </label>
+
       <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-3 font-semibold text-white">
         <Plus size={18} aria-hidden="true" /> Crear programa
       </button>

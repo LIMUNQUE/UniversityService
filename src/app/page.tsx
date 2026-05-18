@@ -118,7 +118,7 @@ export default function Home() {
             {modules.map((module) => {
               const Icon = module.icon;
               return (
-                <article key={module.title} className="card p-5">
+                <article key={module.title} className="card interactive-card p-5">
                   <div className="flex items-center justify-between gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-lg bg-[#e7f1ec] text-[var(--primary)]">
                       <Icon size={20} aria-hidden="true" />
@@ -149,7 +149,7 @@ export default function Home() {
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {courses.map((course) => (
-            <article key={course.code} className="card p-5">
+            <article key={course.code} className="card interactive-card p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gold)]">
                 {course.code}
               </p>

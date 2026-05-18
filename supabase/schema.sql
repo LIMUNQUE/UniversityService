@@ -6,6 +6,8 @@ create table public.profiles (
   role public.user_role not null default 'student',
   full_name text,
   phone text,
+  moodle_user_id integer,
+  moodle_sync_error text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -16,6 +18,9 @@ create table public.programs (
   title text not null,
   modality text,
   teacher_id uuid references public.profiles(id) on delete set null,
+  price_cents integer not null default 10000,
+  moodle_course_id integer,
+  moodle_sync_error text,
   starts_on date,
   created_at timestamptz not null default now()
 );
@@ -25,6 +30,8 @@ create table public.enrollments (
   profile_id uuid not null references public.profiles(id) on delete cascade,
   program_id uuid not null references public.programs(id) on delete cascade,
   moodle_course_id text,
+  moodle_enrolled_at timestamptz,
+  moodle_sync_error text,
   created_at timestamptz not null default now(),
   unique (profile_id, program_id)
 );
@@ -117,9 +124,18 @@ create policy "Students can delete own enrollments"
   on public.enrollments for delete
   using (auth.uid() = profile_id);
 
+create policy "Students can update own enrollments"
+  on public.enrollments for update
+  using (auth.uid() = profile_id)
+  with check (auth.uid() = profile_id);
+
 create policy "Payments are readable by owner"
   on public.payments for select
   using (auth.uid() = profile_id);
+
+create policy "Users can create own payments"
+  on public.payments for insert
+  with check (auth.uid() = profile_id);
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -151,15 +167,112 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
-insert into public.programs (code, title, modality, starts_on)
+insert into public.programs (code, title, modality, price_cents, starts_on)
 values
-  ('PROG-001', 'Programa placeholder de posgrado', 'Hibrido', '2026-06-01'),
-  ('CUR-002', 'Curso placeholder de educacion continua', 'En linea', '2026-07-15'),
-  ('DIP-003', 'Diplomado placeholder institucional', 'Presencial', '2026-08-20')
+  ('PROG-001', 'Programa placeholder de posgrado', 'Hibrido', 25000, '2026-06-01'),
+  ('CUR-002', 'Curso placeholder de educacion continua', 'En linea', 10000, '2026-07-15'),
+  ('DIP-003', 'Diplomado placeholder institucional', 'Presencial', 18000, '2026-08-20')
 on conflict (code) do update set
   title = excluded.title,
   modality = excluded.modality,
+  price_cents = excluded.price_cents,
   starts_on = excluded.starts_on;
 
 alter table public.programs
   add column if not exists teacher_id uuid references public.profiles(id) on delete set null;
+
+alter table public.programs
+  add column if not exists price_cents integer not null default 10000;
+
+alter table public.profiles
+  add column if not exists moodle_user_id integer,
+  add column if not exists moodle_sync_error text;
+
+alter table public.programs
+  add column if not exists moodle_course_id integer,
+  add column if not exists moodle_sync_error text;
+
+alter table public.enrollments
+  add column if not exists moodle_enrolled_at timestamptz,
+  add column if not exists moodle_sync_error text;
+
+create table public.course_materials (
+  id uuid primary key default gen_random_uuid(),
+  program_id uuid not null references public.programs(id) on delete cascade,
+  title text not null,
+  description text,
+  resource_url text,
+  created_by uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table public.assignments (
+  id uuid primary key default gen_random_uuid(),
+  program_id uuid not null references public.programs(id) on delete cascade,
+  title text not null,
+  description text,
+  due_at timestamptz,
+  created_by uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table public.course_materials enable row level security;
+alter table public.assignments enable row level security;
+
+create policy "Course materials are readable by enrolled users and owner teacher"
+  on public.course_materials for select
+  using (
+    exists (
+      select 1
+      from public.programs
+      where programs.id = course_materials.program_id
+        and programs.teacher_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from public.enrollments
+      where enrollments.program_id = course_materials.program_id
+        and enrollments.profile_id = auth.uid()
+    )
+  );
+
+create policy "Teachers can create own course materials"
+  on public.course_materials for insert
+  with check (
+    created_by = auth.uid()
+    and exists (
+      select 1
+      from public.programs
+      where programs.id = course_materials.program_id
+        and programs.teacher_id = auth.uid()
+    )
+  );
+
+create policy "Assignments are readable by enrolled users and owner teacher"
+  on public.assignments for select
+  using (
+    exists (
+      select 1
+      from public.programs
+      where programs.id = assignments.program_id
+        and programs.teacher_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from public.enrollments
+      where enrollments.program_id = assignments.program_id
+        and enrollments.profile_id = auth.uid()
+    )
+  );
+
+create policy "Teachers can create own assignments"
+  on public.assignments for insert
+  with check (
+    created_by = auth.uid()
+    and exists (
+      select 1
+      from public.programs
+      where programs.id = assignments.program_id
+        and programs.teacher_id = auth.uid()
+    )
+  );
